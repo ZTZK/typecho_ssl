@@ -1,0 +1,74 @@
+server {
+ listen   443 ssl; ## listen for ipv4; this line is default and implied
+ #listen   [::]:443 default ipv6only=on; ## listen for ipv6
+ # listen 80; 
+ server_name $DOMAIN;
+
+  ssl_session_timeout 5m;
+  ssl_certificate /etc/nginx/cert/typecho.pem;
+  ssl_certificate_key /etc/nginx/cert/typecho.key;
+  ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE:ECDH:AES:HIGH:!NULL:!aNULL:!MD5:!ADH:!RC4;
+  ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+  ssl_prefer_server_ciphers on;
+
+  root /app;
+  index index.php index.html index.htm;
+
+  location ~ .*\.php(\/.*)*$ {
+    fastcgi_split_path_info ^(.+\.php)(/.+)$;
+    try_files $uri /index.php =404;
+    fastcgi_pass unix:/var/run/php7-fpm.sock;
+    # Mitigate https://httpoxy.org/ vulnerabilities
+	  fastcgi_param HTTP_PROXY "";
+    fastcgi_index index.php;
+    include fastcgi.conf;
+    fastcgi_connect_timeout 300;
+    fastcgi_read_timeout 600;
+    fastcgi_send_timeout 300;
+    fastcgi_buffer_size 128k;
+    fastcgi_buffers   4 128k;
+    fastcgi_busy_buffers_size 256k;
+    fastcgi_temp_file_write_size 256k;
+  }
+
+    #unless the request is for a valid file (image, js, css, etc.), send to bootstrap
+    if (!-e $request_filename)
+    {
+        rewrite ^(.*)$ /index.php$1 last;
+        break;
+    }
+
+    location / {
+          index  index.php
+          try_files $uri $uri/ /index.php?$query_string;
+    }
+
+  location ~* \.(?:jpg|jpeg|gif|png|ico|cur|gz|svg|svgz|mp4|ogg|ogv|webm|htc|ttf|ttc|otf|eot|woff)$ {
+    try_files $uri /index.php?$query_string;
+    expires max;
+    access_log off;
+    log_not_found off;
+    add_header Pragma public;
+    add_header Cache-Control "public, must-revalidate, proxy-revalidate";
+  }
+
+  location ~* \.(?:css|js)$ {
+    try_files $uri /index.php?$query_string;
+    expires 1y;
+    add_header Cache-Control "public";
+  }
+
+  # deny access to . files, for security
+  location ~* (?:^|/)\. {
+    access_log off;
+    log_not_found off;
+    deny all;
+  }
+
+  location ~* (?:\.(?:bak|config|db|sql|fla|psd|ini|log|sh|inc|swp|dist)|~)$ {
+    deny all;
+    access_log off;
+    log_not_found off;
+  }
+
+}
